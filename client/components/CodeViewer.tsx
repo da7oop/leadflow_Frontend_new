@@ -1,4 +1,17 @@
 import { useState } from "react";
+import { Copy, X, ChevronDown, ChevronUp } from "lucide-react";
+import { Button } from "@/components/ui/button";
+
+interface CodeViewerProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+export default function CodeViewer({ isOpen, onClose }: CodeViewerProps) {
+  const [copied, setCopied] = useState(false);
+  const [expanded, setExpanded] = useState(true);
+
+  const emailEditorCode = `import { useState } from "react";
 import { X, Send, ChevronDown, ChevronUp, Lightbulb } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -73,23 +86,23 @@ export default function EmailEditor({
           .filter((word) => word.length > 4)
           .slice(0, 3)
           .join(" ");
-        setSubject(`Re: ${keywords || "Your inquiry"}`);
+        setSubject(\`Re: \${keywords || "Your inquiry"}\`);
       }
 
       // Draft email body from conversation context
       if (!body) {
-        const draftBody = `Dear [Client Name],
+        const draftBody = \`Dear [Client Name],
 
 Thank you for reaching out. Based on our conversation, here are the key points:
 
-${clientMessages
-  .map((msg) => `• ${msg.content.substring(0, 80)}...`)
-  .join("\n")}
+\${clientMessages
+  .map((msg) => \`• \${msg.content.substring(0, 80)}...\`)
+  .join("\\n")}
 
 I believe this addresses your needs and aligns with your requirements. Please let me know if you have any additional questions or if you'd like to discuss further.
 
 Best regards,
-[Your Name]`;
+[Your Name]\`;
 
         setBody(draftBody);
       }
@@ -214,11 +227,11 @@ Best regards,
                     {conversationHistory.map((message) => (
                       <div
                         key={message.id}
-                        className={`text-xs rounded-lg p-2 ${
+                        className={\`text-xs rounded-lg p-2 \${
                           message.type === "user"
                             ? "bg-primary/10 text-foreground border border-primary/20"
                             : "bg-card border border-border text-foreground"
-                        }`}
+                        }\`}
                       >
                         <div className="font-semibold mb-1 text-xs uppercase tracking-wide text-foreground/70">
                           {message.type === "user" ? "You" : "Assistant"}
@@ -268,6 +281,69 @@ Best regards,
             <Send className="w-4 h-4" />
             Send Email
           </Button>
+        </div>
+      </div>
+    </div>
+  );
+}`;
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(emailEditorCode);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-40 bg-black/50 flex items-center justify-center p-4 animate-in fade-in">
+      <div className="bg-card border border-border rounded-lg shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col animate-in slide-in-from-bottom-4">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-border px-6 py-4">
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-semibold text-foreground">
+              EmailEditor Component Code
+            </h2>
+            <span className="text-xs px-2 py-1 bg-primary/10 border border-primary/20 rounded text-primary font-mono">
+              client/components/EmailEditor.tsx
+            </span>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-accent/10 rounded-lg transition-colors text-foreground/70 hover:text-foreground"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto">
+          <pre className="px-6 py-6 text-xs text-foreground/80 bg-background font-mono whitespace-pre-wrap break-words">
+            <code>{emailEditorCode}</code>
+          </pre>
+        </div>
+
+        {/* Footer */}
+        <div className="border-t border-border px-6 py-4 flex items-center justify-between bg-card">
+          <div className="text-sm text-foreground/60">
+            Features: CC/BCC fields • Conversation review • Auto-draft from chat history
+          </div>
+          <div className="flex gap-3">
+            <Button
+              onClick={onClose}
+              variant="outline"
+              className="rounded-lg"
+            >
+              Close
+            </Button>
+            <Button
+              onClick={handleCopy}
+              className="bg-gradient-to-r from-primary to-primary/80 hover:shadow-lg hover:shadow-primary/25 rounded-lg flex items-center gap-2"
+            >
+              <Copy className="w-4 h-4" />
+              {copied ? "Copied!" : "Copy Code"}
+            </Button>
+          </div>
         </div>
       </div>
     </div>

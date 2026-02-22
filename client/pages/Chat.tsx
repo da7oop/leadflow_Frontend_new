@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from "react";
-import { Send, Plus } from "lucide-react";
+import { Send, Plus, Code } from "lucide-react";
 import Layout from "@/components/Layout";
 import EmailEditor from "@/components/EmailEditor";
+import CodeViewer from "@/components/CodeViewer";
 import { useNavigate } from "react-router-dom";
 
 interface Message {
@@ -13,6 +14,8 @@ interface Message {
 
 interface EmailDraft {
   to?: string;
+  cc?: string;
+  bcc?: string;
   subject?: string;
   body?: string;
 }
@@ -30,6 +33,7 @@ export default function Chat() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [showEmailEditor, setShowEmailEditor] = useState(false);
+  const [showCodeViewer, setShowCodeViewer] = useState(false);
   const [emailDraft, setEmailDraft] = useState<EmailDraft>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -139,12 +143,23 @@ export default function Chat() {
     }, 1000);
   };
 
-  const handleSendEmail = (email: { to: string; subject: string; body: string }) => {
+  const handleSendEmail = (email: {
+    to: string;
+    cc: string;
+    bcc: string;
+    subject: string;
+    body: string;
+  }) => {
+    // Build recipient list for display
+    let recipientText = `to ${email.to}`;
+    if (email.cc) recipientText += `, cc ${email.cc}`;
+    if (email.bcc) recipientText += `, bcc ${email.bcc}`;
+
     // Add user message showing the email was sent
     const userMessage: Message = {
       id: Date.now().toString(),
       type: "user",
-      content: `Sending email to ${email.to} with subject: "${email.subject}"`,
+      content: `Sending email ${recipientText} with subject: "${email.subject}"`,
       timestamp: new Date(),
     };
 
@@ -153,10 +168,11 @@ export default function Chat() {
     // Simulate email sending and AI response
     setLoading(true);
     setTimeout(() => {
+      const recipientDisplay = email.cc || email.bcc ? ` to ${email.to} and others` : ` to ${email.to}`;
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         type: "assistant",
-        content: `Email sent successfully to ${email.to}! The message has been delivered.`,
+        content: `Email sent successfully${recipientDisplay}! The message with subject "${email.subject}" has been delivered.`,
         timestamp: new Date(),
       };
 
@@ -181,17 +197,31 @@ export default function Chat() {
       {showEmailEditor && (
         <EmailEditor
           draftContent={emailDraft}
+          conversationHistory={messages}
           onClose={() => setShowEmailEditor(false)}
           onSend={handleSendEmail}
         />
       )}
+      <CodeViewer
+        isOpen={showCodeViewer}
+        onClose={() => setShowCodeViewer(false)}
+      />
       <div className="h-[calc(100vh-4rem)] flex flex-col bg-background">
         {/* Chat Header */}
         <div className="border-b border-border px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
           <h1 className="text-xl font-semibold text-foreground">Chat</h1>
-          <button className="p-2 hover:bg-accent/10 rounded-lg transition-colors">
-            <Plus className="w-6 h-6 text-foreground/70" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowCodeViewer(true)}
+              className="p-2 hover:bg-accent/10 rounded-lg transition-colors"
+              title="View EmailEditor code"
+            >
+              <Code className="w-6 h-6 text-foreground/70 hover:text-foreground" />
+            </button>
+            <button className="p-2 hover:bg-accent/10 rounded-lg transition-colors">
+              <Plus className="w-6 h-6 text-foreground/70" />
+            </button>
+          </div>
         </div>
 
         {/* Messages Container */}
