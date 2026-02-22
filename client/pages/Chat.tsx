@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Send, Plus } from "lucide-react";
 import Layout from "@/components/Layout";
+import EmailEditor from "@/components/EmailEditor";
 import { useNavigate } from "react-router-dom";
 
 interface Message {
@@ -8,6 +9,12 @@ interface Message {
   type: "user" | "assistant";
   content: string;
   timestamp: Date;
+}
+
+interface EmailDraft {
+  to?: string;
+  subject?: string;
+  body?: string;
 }
 
 export default function Chat() {
@@ -22,6 +29,8 @@ export default function Chat() {
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showEmailEditor, setShowEmailEditor] = useState(false);
+  const [emailDraft, setEmailDraft] = useState<EmailDraft>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Check authentication
@@ -37,9 +46,62 @@ export default function Chat() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Detect email intent from user input
+  const detectEmailIntent = (text: string): { isEmail: boolean; draft: EmailDraft } => {
+    const emailKeywords = [
+      /send\s+(?:an?\s+)?email/i,
+      /email\s+(?:to|about)/i,
+      /compose\s+(?:an?\s+)?email/i,
+      /write\s+(?:an?\s+)?email/i,
+      /draft\s+(?:an?\s+)?email/i,
+      /create\s+(?:an?\s+)?email/i,
+    ];
+
+    const isEmail = emailKeywords.some((regex) => regex.test(text));
+
+    if (isEmail) {
+      // Try to extract email details from the text
+      const emailRegex = /[\w.-]+@[\w.-]+\.\w+/g;
+      const emails = text.match(emailRegex);
+      const to = emails?.[0] || "";
+
+      // Extract subject (look for patterns like "subject:" or "about:")
+      const subjectMatch = text.match(/(?:subject|about|title):\s*(.+?)(?:\n|$)/i);
+      const subject = subjectMatch?.[1]?.trim() || "";
+
+      // Extract body (remaining text after keywords and metadata)
+      const body = text
+        .replace(emailKeywords.map((r) => r.source).join("|"), "")
+        .replace(/(?:subject|about|title):\s*.+/i, "")
+        .replace(/@[\w.-]+\.\w+/g, "")
+        .trim();
+
+      return {
+        isEmail: true,
+        draft: {
+          to,
+          subject: subject || "New Message",
+          body: body || text,
+        },
+      };
+    }
+
+    return { isEmail: false, draft: {} };
+  };
+
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim()) return;
+
+    // Check for email intent
+    const { isEmail, draft } = detectEmailIntent(input);
+
+    if (isEmail) {
+      // Show email editor instead of sending message
+      setEmailDraft(draft);
+      setShowEmailEditor(true);
+      return;
+    }
 
     // Add user message
     const userMessage: Message = {
@@ -77,6 +139,36 @@ export default function Chat() {
     }, 1000);
   };
 
+  const handleSendEmail = (email: { to: string; subject: string; body: string }) => {
+    // Add user message showing the email was sent
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      type: "user",
+      content: `Sending email to ${email.to} with subject: "${email.subject}"`,
+      timestamp: new Date(),
+    };
+
+    setMessages((prev) => [...prev, userMessage]);
+
+    // Simulate email sending and AI response
+    setLoading(true);
+    setTimeout(() => {
+      const assistantMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        type: "assistant",
+        content: `Email sent successfully to ${email.to}! The message has been delivered.`,
+        timestamp: new Date(),
+      };
+
+      setMessages((prev) => [...prev, assistantMessage]);
+      setLoading(false);
+    }, 1000);
+
+    // Close the editor
+    setShowEmailEditor(false);
+    setInput("");
+  };
+
   const handleLogout = () => {
     localStorage.removeItem("isAuthenticated");
     localStorage.removeItem("userEmail");
@@ -86,6 +178,13 @@ export default function Chat() {
 
   return (
     <Layout isAuthenticated={true} onLogout={handleLogout}>
+      {showEmailEditor && (
+        <EmailEditor
+          draftContent={emailDraft}
+          onClose={() => setShowEmailEditor(false)}
+          onSend={handleSendEmail}
+        />
+      )}
       <div className="h-[calc(100vh-4rem)] flex flex-col bg-background">
         {/* Chat Header */}
         <div className="border-b border-border px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
