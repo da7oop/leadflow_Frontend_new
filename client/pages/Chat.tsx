@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from "react";
-import { Send, Plus } from "lucide-react";
+import { Send, Plus, Code } from "lucide-react";
 import Layout from "@/components/Layout";
+import EmailEditor from "@/components/EmailEditor";
+import CodeViewer from "@/components/CodeViewer";
 import { useNavigate } from "react-router-dom";
 
 interface Message {
@@ -8,6 +10,14 @@ interface Message {
   type: "user" | "assistant";
   content: string;
   timestamp: Date;
+}
+
+interface EmailDraft {
+  to?: string;
+  cc?: string;
+  bcc?: string;
+  subject?: string;
+  body?: string;
 }
 
 export default function Chat() {
@@ -22,6 +32,9 @@ export default function Chat() {
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showEmailEditor, setShowEmailEditor] = useState(false);
+  const [showCodeViewer, setShowCodeViewer] = useState(false);
+  const [emailDraft, setEmailDraft] = useState<EmailDraft>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Check authentication
@@ -37,9 +50,62 @@ export default function Chat() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Detect email intent from user input
+  const detectEmailIntent = (text: string): { isEmail: boolean; draft: EmailDraft } => {
+    const emailKeywords = [
+      /send\s+(?:an?\s+)?email/i,
+      /email\s+(?:to|about)/i,
+      /compose\s+(?:an?\s+)?email/i,
+      /write\s+(?:an?\s+)?email/i,
+      /draft\s+(?:an?\s+)?email/i,
+      /create\s+(?:an?\s+)?email/i,
+    ];
+
+    const isEmail = emailKeywords.some((regex) => regex.test(text));
+
+    if (isEmail) {
+      // Try to extract email details from the text
+      const emailRegex = /[\w.-]+@[\w.-]+\.\w+/g;
+      const emails = text.match(emailRegex);
+      const to = emails?.[0] || "";
+
+      // Extract subject (look for patterns like "subject:" or "about:")
+      const subjectMatch = text.match(/(?:subject|about|title):\s*(.+?)(?:\n|$)/i);
+      const subject = subjectMatch?.[1]?.trim() || "";
+
+      // Extract body (remaining text after keywords and metadata)
+      const body = text
+        .replace(emailKeywords.map((r) => r.source).join("|"), "")
+        .replace(/(?:subject|about|title):\s*.+/i, "")
+        .replace(/@[\w.-]+\.\w+/g, "")
+        .trim();
+
+      return {
+        isEmail: true,
+        draft: {
+          to,
+          subject: subject || "New Message",
+          body: body || text,
+        },
+      };
+    }
+
+    return { isEmail: false, draft: {} };
+  };
+
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim()) return;
+
+    // Check for email intent
+    const { isEmail, draft } = detectEmailIntent(input);
+
+    if (isEmail) {
+      // Show email editor instead of sending message
+      setEmailDraft(draft);
+      setShowEmailEditor(true);
+      return;
+    }
 
     // Add user message
     const userMessage: Message = {
@@ -77,6 +143,82 @@ export default function Chat() {
     }, 1000);
   };
 
+  const handleSendEmail = async (email: {
+    to: string;
+    cc: string;
+    bcc: string;
+    subject: string;
+    body: string;
+  }) => {
+    // Build recipient list for display
+    let recipientText = `to ${email.to}`;
+    if (email.cc) recipientText += `, cc ${email.cc}`;
+    if (email.bcc) recipientText += `, bcc ${email.bcc}`;
+
+    // Add user message showing the email is being sent
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      type: "user",
+      content: `Sending email ${recipientText} with subject: "${email.subject}"`,
+      timestamp: new Date(),
+    };
+
+    setMessages((prev) => [...prev, userMessage]);
+    setLoading(true);
+
+    try {
+      // Call the backend email API
+      const response = await fetch("/api/send-email", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          to: email.to,
+          cc: email.cc,
+          bcc: email.bcc,
+          subject: email.subject,
+          body: email.body,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          result.message || "Failed to send email. Please try again."
+        );
+      }
+
+      // Show success message
+      const recipientDisplay = email.cc || email.bcc ? ` to ${email.to} and others` : ` to ${email.to}`;
+      const assistantMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        type: "assistant",
+        content: `✅ Email sent successfully${recipientDisplay}! The message with subject "${email.subject}" has been delivered.`,
+        timestamp: new Date(),
+      };
+
+      setMessages((prev) => [...prev, assistantMessage]);
+    } catch (error) {
+      // Show error message
+      const errorMessage = error instanceof Error ? error.message : "Failed to send email";
+      const assistantMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        type: "assistant",
+        content: `❌ Email sending failed: ${errorMessage}. Please verify your email settings and try again.`,
+        timestamp: new Date(),
+      };
+
+      setMessages((prev) => [...prev, assistantMessage]);
+    } finally {
+      setLoading(false);
+      // Close the editor
+      setShowEmailEditor(false);
+      setInput("");
+    }
+  };
+
   const handleLogout = () => {
     localStorage.removeItem("isAuthenticated");
     localStorage.removeItem("userEmail");
@@ -86,13 +228,34 @@ export default function Chat() {
 
   return (
     <Layout isAuthenticated={true} onLogout={handleLogout}>
+      {showEmailEditor && (
+        <EmailEditor
+          draftContent={emailDraft}
+          conversationHistory={messages}
+          onClose={() => setShowEmailEditor(false)}
+          onSend={handleSendEmail}
+        />
+      )}
+      <CodeViewer
+        isOpen={showCodeViewer}
+        onClose={() => setShowCodeViewer(false)}
+      />
       <div className="h-[calc(100vh-4rem)] flex flex-col bg-background">
         {/* Chat Header */}
         <div className="border-b border-border px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
           <h1 className="text-xl font-semibold text-foreground">Chat</h1>
-          <button className="p-2 hover:bg-accent/10 rounded-lg transition-colors">
-            <Plus className="w-6 h-6 text-foreground/70" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowCodeViewer(true)}
+              className="p-2 hover:bg-accent/10 rounded-lg transition-colors"
+              title="View EmailEditor code"
+            >
+              <Code className="w-6 h-6 text-foreground/70 hover:text-foreground" />
+            </button>
+            <button className="p-2 hover:bg-accent/10 rounded-lg transition-colors">
+              <Plus className="w-6 h-6 text-foreground/70" />
+            </button>
+          </div>
         </div>
 
         {/* Messages Container */}
