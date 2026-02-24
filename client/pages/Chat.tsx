@@ -143,7 +143,7 @@ export default function Chat() {
     }, 1000);
   };
 
-  const handleSendEmail = (email: {
+  const handleSendEmail = async (email: {
     to: string;
     cc: string;
     bcc: string;
@@ -155,7 +155,7 @@ export default function Chat() {
     if (email.cc) recipientText += `, cc ${email.cc}`;
     if (email.bcc) recipientText += `, bcc ${email.bcc}`;
 
-    // Add user message showing the email was sent
+    // Add user message showing the email is being sent
     const userMessage: Message = {
       id: Date.now().toString(),
       type: "user",
@@ -164,25 +164,59 @@ export default function Chat() {
     };
 
     setMessages((prev) => [...prev, userMessage]);
-
-    // Simulate email sending and AI response
     setLoading(true);
-    setTimeout(() => {
+
+    try {
+      // Call the backend email API
+      const response = await fetch("/api/send-email", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          to: email.to,
+          cc: email.cc,
+          bcc: email.bcc,
+          subject: email.subject,
+          body: email.body,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          result.message || "Failed to send email. Please try again."
+        );
+      }
+
+      // Show success message
       const recipientDisplay = email.cc || email.bcc ? ` to ${email.to} and others` : ` to ${email.to}`;
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         type: "assistant",
-        content: `Email sent successfully${recipientDisplay}! The message with subject "${email.subject}" has been delivered.`,
+        content: `✅ Email sent successfully${recipientDisplay}! The message with subject "${email.subject}" has been delivered to your Gmail inbox.`,
         timestamp: new Date(),
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
-      setLoading(false);
-    }, 1000);
+    } catch (error) {
+      // Show error message
+      const errorMessage = error instanceof Error ? error.message : "Failed to send email";
+      const assistantMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        type: "assistant",
+        content: `❌ Email sending failed: ${errorMessage}. Please check your Gmail credentials and try again.`,
+        timestamp: new Date(),
+      };
 
-    // Close the editor
-    setShowEmailEditor(false);
-    setInput("");
+      setMessages((prev) => [...prev, assistantMessage]);
+    } finally {
+      setLoading(false);
+      // Close the editor
+      setShowEmailEditor(false);
+      setInput("");
+    }
   };
 
   const handleLogout = () => {
