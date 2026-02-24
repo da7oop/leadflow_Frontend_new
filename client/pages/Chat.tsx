@@ -195,7 +195,7 @@ export default function Chat() {
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         type: "assistant",
-        content: `✅ Email sent successfully${recipientDisplay}! The message with subject "${email.subject}" has been delivered to your Gmail inbox.`,
+        content: `✅ Email sent successfully${recipientDisplay}! The message with subject "${email.subject}" has been delivered.`,
         timestamp: new Date(),
       };
 
@@ -206,7 +206,7 @@ export default function Chat() {
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         type: "assistant",
-        content: `❌ Email sending failed: ${errorMessage}. Please check your Gmail credentials and try again.`,
+        content: `❌ Email sending failed: ${errorMessage}. Please verify your email settings and try again.`,
         timestamp: new Date(),
       };
 
